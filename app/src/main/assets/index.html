@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KPI Worklog &amp; Rekap Harian</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #121212; color: #f5f5f5; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    button { padding: 10px 14px; border: none; border-radius: 8px; cursor: pointer; background: #2a2a2a; color: #fff; }
+    button.active { background: #2563eb; }
+    textarea { width: 100%; min-height: 140px; border-radius: 8px; padding: 10px; background: #1e1e1e; color: #fff; border: 1px solid #333; box-sizing: border-box; }
+    .card { background: #1e1e1e; padding: 14px; border-radius: 10px; margin-bottom: 12px; }
+    .hidden { display: none; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h2>KPI Worklog &amp; Rekap Harian</h2>
+
+  <div class="tabs">
+    <button id="btn-dash" class="active" onclick="showTab('dash')">Dashboard</button>
+    <button id="btn-input" onclick="showTab('input')">Input Estimasi</button>
+    <button id="btn-kpi" onclick="showTab('kpi')">KPI &amp; Excel</button>
+  </div>
+
+  <div id="tab-dash" class="card">
+    <h3>Ringkasan</h3>
+    <p id="summaryText">Belum ada data tersimpan.</p>
+  </div>
+
+  <div id="tab-input" class="card hidden">
+    <h3>Input Log Estimasi</h3>
+    <textarea id="rawLog" placeholder="Contoh:&#10;Cleaning AC - DO101 - Finish&#10;SC Kelz - DO102 - Jalur&#10;Install AC - DO103 - Pending"></textarea>
+    <div style="margin-top:10px; display:flex; gap:8px;">
+      <button class="active" onclick="parseAndSave()">Parse &amp; Simpan</button>
+      <button onclick="fillSample()">Isi Contoh</button>
+    </div>
+  </div>
+
+  <div id="tab-kpi" class="card hidden">
+    <h3>Rekap KPI &amp; Export CSV/Excel</h3>
+    <button class="active" onclick="exportCSV()">Unduh CSV (Buka di Excel)</button>
+    <table>
+      <thead>
+        <tr><th>Job</th><th>DO / Ref</th><th>Status</th></tr>
+      </thead>
+      <tbody id="kpiTableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "kpi_worklog_items_v1";
+    let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+    function showTab(name) {
+      ["dash", "input", "kpi"].forEach(t => {
+        document.getElementById("tab-" + t).classList.toggle("hidden", t !== name);
+        document.getElementById("btn-" + t).classList.toggle("active", t === name);
+      });
+      render();
+    }
+
+    function fillSample() {
+      document.getElementById("rawLog").value =
+        "Cleaning AC - DO001 - Finish\nSC Kelz - DO002 - Jalur\nInstall AC - DO003 - Pending\nCleaning AC - DO004 - Cancel";
+    }
+
+    function parseAndSave() {
+      const lines = document.getElementById("rawLog").value.split("\n").map(l => l.trim()).filter(Boolean);
+      const parsed = lines.map(line => {
+        const parts = line.split("-").map(p => p.trim());
+        return {
+          job: parts[0] || "Umum",
+          ref: parts[1] || "-",
+          status: parts[2] || "Jalur"
+        };
+      });
+      items = parsed;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      render();
+      showTab("dash");
+    }
+
+    function exportCSV() {
+      const rows = [["Job", "DO / Ref", "Status"], ...items.map(i => [i.job, i.ref, i.status])];
+      const csv = rows.map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "rekap-kpi.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function render() {
+      const total = items.length;
+      const counts = items.reduce((acc, cur) => {
+        acc[cur.status] = (acc[cur.status] || 0) + 1;
+        return acc;
+      }, {});
+      document.getElementById("summaryText").textContent =
+        `Total data: ${total} | Finish: ${counts["Finish"] || 0}, Jalur: ${counts["Jalur"] || 0}, Pending: ${counts["Pending"] || 0}, Cancel: ${counts["Cancel"] || 0}`;
+
+      const tbody = document.getElementById("kpiTableBody");
+      tbody.innerHTML = items.map(i =>
+        `<tr><td>${i.job}</td><td>${i.ref}</td><td>${i.status}</td></tr>`
+      ).join("");
+    }
+
+    render();
+  </script>
+</body>
+</html>
